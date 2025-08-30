@@ -10,6 +10,8 @@ import sys
 import subprocess
 import tempfile
 import threading
+import shutil
+import time
 from pathlib import Path
 
 # Configuración de la aplicación
@@ -123,7 +125,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="HOLA MUNDO!", 
+            text="HOALAAAAAA!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
@@ -211,7 +213,7 @@ class MainApp:
         # Ventana de progreso
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Actualizando...")
-        progress_window.geometry("300x100")
+        progress_window.geometry("300x120")
         progress_window.resizable(False, False)
         progress_window.transient(self.root)
         progress_window.grab_set()
@@ -219,7 +221,7 @@ class MainApp:
         # Centrar ventana de progreso
         x = self.root.winfo_x() + 50
         y = self.root.winfo_y() + 50
-        progress_window.geometry(f"300x100+{x}+{y}")
+        progress_window.geometry(f"300x120+{x}+{y}")
         
         progress_label = tk.Label(progress_window, text="Descargando actualización...")
         progress_label.pack(pady=10)
@@ -236,39 +238,50 @@ class MainApp:
             progress_var.set(percentage)
             progress_window.update()
         
-        def download_and_install():
+        def download_and_prepare():
             try:
+                # Verificar si es ejecutable compilado
+                if not getattr(sys, 'frozen', False):
+                    messagebox.showinfo("Modo Desarrollo", 
+                        "Las actualizaciones solo funcionan en el ejecutable compilado.")
+                    progress_window.destroy()
+                    return
+                
                 checker = UpdateChecker(VERSION)
                 temp_file = checker.download_update(download_url, update_progress)
                 
                 if temp_file:
-                    progress_label.config(text="Instalando actualización...")
+                    progress_label.config(text="Preparando actualización...")
                     progress_window.update()
                     
-                    # Obtener la ruta del ejecutable actual
-                    if getattr(sys, 'frozen', False):
-                        # Si es un ejecutable compilado
-                        current_exe = sys.executable
-                    else:
-                        # Si es un script Python en desarrollo
-                        messagebox.showinfo("Modo Desarrollo", 
-                            "Actualizaciones solo funcionan en el ejecutable.")
-                        progress_window.destroy()
-                        return
+                    # Obtener rutas
+                    current_exe = sys.executable
+                    app_dir = os.path.dirname(current_exe)
+                    new_exe_path = os.path.join(app_dir, "SegundaApp_new.exe")
                     
-                    # Crear script de actualización
-                    self.create_update_script(temp_file, current_exe)
+                    # Mover el archivo descargado al directorio de la app
+                    shutil.move(temp_file, new_exe_path)
                     
-                    messagebox.showinfo(
-                        "Actualización Lista",
-                        "La aplicación se cerrará y se actualizará automáticamente."
-                    )
+                    # Crear script de actualización más simple
+                    self.create_simple_update_script(new_exe_path, current_exe)
+                    
                     progress_window.destroy()
                     
-                    # Cerrar completamente la aplicación
-                    self.root.quit()
-                    self.root.destroy()
-                    sys.exit(0)
+                    # Mostrar mensaje y cerrar inmediatamente
+                    result = messagebox.askokcancel(
+                        "Actualización Lista",
+                        "La actualización está lista. La aplicación se cerrará ahora y se actualizará automáticamente.\n\n¿Continuar?"
+                    )
+                    
+                    if result:
+                        # Cerrar inmediatamente sin reiniciar
+                        self.root.quit()
+                        self.root.destroy()
+                        os._exit(0)  # Forzar cierre completo
+                    else:
+                        # Si cancela, limpiar archivo temporal
+                        if os.path.exists(new_exe_path):
+                            os.remove(new_exe_path)
                 else:
                     messagebox.showerror("Error", "No se pudo descargar la actualización.")
                     progress_window.destroy()
@@ -278,93 +291,90 @@ class MainApp:
                 progress_window.destroy()
         
         # Ejecutar descarga en hilo separado
-        thread = threading.Thread(target=download_and_install, daemon=True)
+        thread = threading.Thread(target=download_and_prepare, daemon=True)
         thread.start()
     
-    def create_update_script(self, temp_file, current_exe):
-        """Crea un script para reemplazar el ejecutable"""
-        script_content = f'''
+    def create_simple_update_script(self, new_exe_path, current_exe):
+        """Crea un script de actualización más simple y confiable"""
+        script_content = f'''import os
 import time
 import shutil
 import subprocess
-import os
 import sys
 
-def update_app():
-    # Esperar a que se cierre la aplicación principal
-    time.sleep(3)
+def main():
+    # Esperar un poco para asegurar que la app se cerró
+    time.sleep(4)
+    
+    new_file = r"{new_exe_path}"
+    current_file = r"{current_exe}"
+    backup_file = current_file + ".backup"
     
     try:
-        # Crear backup del ejecutable actual
-        backup_path = r"{current_exe}.backup"
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
+        print("Iniciando actualización...")
         
-        # Hacer backup
-        shutil.copy2(r"{current_exe}", backup_path)
+        # Verificar que el nuevo archivo existe
+        if not os.path.exists(new_file):
+            print("Error: Archivo de actualización no encontrado")
+            return
         
-        # Intentar reemplazar el ejecutable
-        max_attempts = 10
-        for attempt in range(max_attempts):
+        # Esperar hasta que el proceso original termine completamente
+        for i in range(20):  # Esperar hasta 20 segundos
             try:
-                # Forzar cierre de procesos que puedan estar usando el archivo
-                if os.path.exists(r"{current_exe}"):
-                    os.remove(r"{current_exe}")
-                
-                # Mover el nuevo archivo
-                shutil.move(r"{temp_file}", r"{current_exe}")
-                
-                # Si llegamos aquí, fue exitoso
-                print("Actualización exitosa")
+                # Intentar hacer backup del archivo actual
+                if os.path.exists(current_file):
+                    shutil.copy2(current_file, backup_file)
+                    os.remove(current_file)
                 break
-                
-            except (PermissionError, OSError) as e:
-                print(f"Intento {{attempt + 1}} fallido: {{e}}")
+            except (PermissionError, OSError):
+                print(f"Esperando que termine el proceso... ({{i+1}}/20)")
                 time.sleep(1)
-                
-                if attempt == max_attempts - 1:
-                    # Restaurar backup si falló todo
-                    if os.path.exists(backup_path):
-                        shutil.move(backup_path, r"{current_exe}")
-                    raise e
+        else:
+            print("Error: No se pudo acceder al archivo original")
+            return
+        
+        # Mover el nuevo archivo
+        shutil.move(new_file, current_file)
+        print("Archivo actualizado exitosamente")
+        
+        # Limpiar backup
+        if os.path.exists(backup_file):
+            os.remove(backup_file)
         
         # Reiniciar la aplicación
-        subprocess.Popen([r"{current_exe}"], shell=False)
+        print("Reiniciando aplicación...")
+        subprocess.Popen([current_file], shell=False)
+        print("Actualización completada")
         
-        # Limpiar backup si todo fue bien
-        if os.path.exists(backup_path):
-            os.remove(backup_path)
-            
     except Exception as e:
         print(f"Error durante actualización: {{e}}")
-        # Intentar restaurar backup
-        if os.path.exists(backup_path):
+        # Restaurar backup si existe
+        if os.path.exists(backup_file):
             try:
-                shutil.move(backup_path, r"{current_exe}")
+                shutil.move(backup_file, current_file)
                 print("Backup restaurado")
             except:
-                pass
+                print("No se pudo restaurar backup")
 
 if __name__ == "__main__":
-    update_app()
-    
-    # Autodestrucción del script
+    main()
+    # Autolimpieza
     try:
-        os.remove(sys.argv[0])
+        time.sleep(2)
+        os.remove(__file__)
     except:
         pass
 '''
         
-        script_path = os.path.join(tempfile.gettempdir(), "update_script.py")
-        with open(script_path, 'w') as f:
+        script_path = os.path.join(tempfile.gettempdir(), f"update_script_{int(time.time())}.py")
+        
+        with open(script_path, 'w', encoding='utf-8') as f:
             f.write(script_content)
         
-        # Ejecutar script de actualización
-        if os.name == 'nt':  # Windows
-            subprocess.Popen([sys.executable, script_path], 
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            subprocess.Popen([sys.executable, script_path])
+        # Ejecutar script en proceso separado
+        subprocess.Popen([
+            sys.executable, script_path
+        ], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     
     def run(self):
         """Ejecuta la aplicación"""
