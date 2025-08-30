@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # Se ejecuta cuando creates un tag como v1.0.0, v1.0.1, etc.
 
+permissions:
+  contents: write  # Permite crear releases y subir archivos
+
 jobs:
   build:
     runs-on: windows-latest
