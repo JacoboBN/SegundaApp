@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Configuración de la aplicación
 APP_NAME = "SegundaApp"
-VERSION = "1.0.3"
+VERSION = "1.0.5"
 GITHUB_REPO = "JacoboBN/SegundaApp"
 UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -123,7 +123,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="HOLA MUNDO!", 
+            text="Hello World!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
@@ -246,17 +246,29 @@ class MainApp:
                     progress_window.update()
                     
                     # Obtener la ruta del ejecutable actual
-                    current_exe = sys.executable if getattr(sys, 'frozen', False) else __file__
+                    if getattr(sys, 'frozen', False):
+                        # Si es un ejecutable compilado
+                        current_exe = sys.executable
+                    else:
+                        # Si es un script Python en desarrollo
+                        messagebox.showinfo("Modo Desarrollo", 
+                            "Actualizaciones solo funcionan en el ejecutable.")
+                        progress_window.destroy()
+                        return
                     
                     # Crear script de actualización
                     self.create_update_script(temp_file, current_exe)
                     
                     messagebox.showinfo(
                         "Actualización Lista",
-                        "La actualización se instalará al cerrar la aplicación."
+                        "La aplicación se cerrará y se actualizará automáticamente."
                     )
                     progress_window.destroy()
+                    
+                    # Cerrar completamente la aplicación
                     self.root.quit()
+                    self.root.destroy()
+                    sys.exit(0)
                 else:
                     messagebox.showerror("Error", "No se pudo descargar la actualización.")
                     progress_window.destroy()
@@ -278,24 +290,69 @@ import subprocess
 import os
 import sys
 
-# Esperar a que se cierre la aplicación principal
-time.sleep(2)
-
-try:
-    # Reemplazar el ejecutable
-    shutil.move(r"{temp_file}", r"{current_exe}")
+def update_app():
+    # Esperar a que se cierre la aplicación principal
+    time.sleep(3)
     
-    # Reiniciar la aplicación
-    subprocess.Popen([r"{current_exe}"])
-    
-except Exception as e:
-    print(f"Error durante actualización: {{e}}")
+    try:
+        # Crear backup del ejecutable actual
+        backup_path = r"{current_exe}.backup"
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+        
+        # Hacer backup
+        shutil.copy2(r"{current_exe}", backup_path)
+        
+        # Intentar reemplazar el ejecutable
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            try:
+                # Forzar cierre de procesos que puedan estar usando el archivo
+                if os.path.exists(r"{current_exe}"):
+                    os.remove(r"{current_exe}")
+                
+                # Mover el nuevo archivo
+                shutil.move(r"{temp_file}", r"{current_exe}")
+                
+                # Si llegamos aquí, fue exitoso
+                print("Actualización exitosa")
+                break
+                
+            except (PermissionError, OSError) as e:
+                print(f"Intento {{attempt + 1}} fallido: {{e}}")
+                time.sleep(1)
+                
+                if attempt == max_attempts - 1:
+                    # Restaurar backup si falló todo
+                    if os.path.exists(backup_path):
+                        shutil.move(backup_path, r"{current_exe}")
+                    raise e
+        
+        # Reiniciar la aplicación
+        subprocess.Popen([r"{current_exe}"], shell=False)
+        
+        # Limpiar backup si todo fue bien
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+            
+    except Exception as e:
+        print(f"Error durante actualización: {{e}}")
+        # Intentar restaurar backup
+        if os.path.exists(backup_path):
+            try:
+                shutil.move(backup_path, r"{current_exe}")
+                print("Backup restaurado")
+            except:
+                pass
 
-# Autodestrucción del script
-try:
-    os.remove(sys.argv[0])
-except:
-    pass
+if __name__ == "__main__":
+    update_app()
+    
+    # Autodestrucción del script
+    try:
+        os.remove(sys.argv[0])
+    except:
+        pass
 '''
         
         script_path = os.path.join(tempfile.gettempdir(), "update_script.py")
@@ -303,8 +360,11 @@ except:
             f.write(script_content)
         
         # Ejecutar script de actualización
-        subprocess.Popen([sys.executable, script_path], 
-                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        if os.name == 'nt':  # Windows
+            subprocess.Popen([sys.executable, script_path], 
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            subprocess.Popen([sys.executable, script_path])
     
     def run(self):
         """Ejecuta la aplicación"""
