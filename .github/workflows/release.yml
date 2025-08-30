@@ -36,13 +36,10 @@ jobs:
         echo "Version: $VERSION"
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref }}
-        release_name: SegundaApp v${{ steps.get_version.outputs.version }}
+        name: SegundaApp v${{ steps.get_version.outputs.version }}
         body: |
           ## Cambios en v${{ steps.get_version.outputs.version }}
           
@@ -58,15 +55,8 @@ jobs:
           ### Requisitos
           - Windows 10 o superior
           
+        files: ./dist/SegundaApp.exe
         draft: false
         prerelease: false
-        
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/SegundaApp.exe
-        asset_name: SegundaApp.exe
-        asset_content_type: application/octet-stream
