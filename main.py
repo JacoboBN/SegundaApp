@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Configuración de la aplicación
 APP_NAME = "SegundaApp"
-VERSION = "1.0.6"
+VERSION = "1.0.8"
 GITHUB_REPO = "JacoboBN/SegundaApp"
 UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -75,9 +75,10 @@ class UpdateChecker:
             response = requests.get(download_url, stream=True)
             response.raise_for_status()
             
-            # Crear archivo temporal
+            # Crear archivo temporal con nombre único
             temp_dir = tempfile.gettempdir()
-            temp_file = os.path.join(temp_dir, f"{APP_NAME}_update.exe")
+            timestamp = int(time.time())
+            temp_file = os.path.join(temp_dir, f"{APP_NAME}_update_{timestamp}.exe")
             
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
@@ -125,7 +126,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="HOALAAAAAA!", 
+            text="¡Hola Mundoooo!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
@@ -191,8 +192,8 @@ class MainApp:
         notes = update_info.get('release_notes', 'Sin notas')
         
         message = f"Nueva versión disponible: v{version}\n\n"
-        message += "¿Deseas actualizar ahora?\n\n"
-        message += f"Notas de la versión:\n{notes[:200]}..."
+        message += "¿Deseas descargar y ejecutar la nueva versión?\n\n"
+        message += "NOTA: Se descargará el nuevo ejecutable y se abrirá automáticamente."
         
         result = messagebox.askyesno(
             "Actualización Disponible",
@@ -201,10 +202,10 @@ class MainApp:
         )
         
         if result:
-            self.perform_update(update_info)
+            self.perform_simple_update(update_info)
     
-    def perform_update(self, update_info):
-        """Realiza la actualización"""
+    def perform_simple_update(self, update_info):
+        """Descarga y ejecuta la nueva versión directamente"""
         download_url = update_info.get('download_url')
         if not download_url:
             messagebox.showerror("Error", "No se encontró el archivo de actualización.")
@@ -212,18 +213,18 @@ class MainApp:
         
         # Ventana de progreso
         progress_window = tk.Toplevel(self.root)
-        progress_window.title("Actualizando...")
-        progress_window.geometry("300x120")
+        progress_window.title("Descargando actualización...")
+        progress_window.geometry("350x120")
         progress_window.resizable(False, False)
         progress_window.transient(self.root)
         progress_window.grab_set()
         
         # Centrar ventana de progreso
-        x = self.root.winfo_x() + 50
-        y = self.root.winfo_y() + 50
-        progress_window.geometry(f"300x120+{x}+{y}")
+        x = self.root.winfo_x() + 25
+        y = self.root.winfo_y() + 40
+        progress_window.geometry(f"350x120+{x}+{y}")
         
-        progress_label = tk.Label(progress_window, text="Descargando actualización...")
+        progress_label = tk.Label(progress_window, text="Descargando nueva versión...")
         progress_label.pack(pady=10)
         
         progress_var = tk.DoubleVar()
@@ -234,147 +235,48 @@ class MainApp:
         )
         progress_bar.pack(pady=10, padx=20, fill=tk.X)
         
+        status_label = tk.Label(progress_window, text="Preparando descarga...", fg="gray")
+        status_label.pack()
+        
         def update_progress(percentage):
             progress_var.set(percentage)
+            status_label.config(text=f"Descargado: {percentage:.1f}%")
             progress_window.update()
         
-        def download_and_prepare():
+        def download_and_launch():
             try:
-                # Verificar si es ejecutable compilado
-                if not getattr(sys, 'frozen', False):
-                    messagebox.showinfo("Modo Desarrollo", 
-                        "Las actualizaciones solo funcionan en el ejecutable compilado.")
-                    progress_window.destroy()
-                    return
-                
                 checker = UpdateChecker(VERSION)
-                temp_file = checker.download_update(download_url, update_progress)
+                new_exe_path = checker.download_update(download_url, update_progress)
                 
-                if temp_file:
-                    progress_label.config(text="Preparando actualización...")
+                if new_exe_path:
+                    status_label.config(text="Descarga completada. Iniciando nueva versión...")
                     progress_window.update()
-                    
-                    # Obtener rutas
-                    current_exe = sys.executable
-                    app_dir = os.path.dirname(current_exe)
-                    new_exe_path = os.path.join(app_dir, "SegundaApp_new.exe")
-                    
-                    # Mover el archivo descargado al directorio de la app
-                    shutil.move(temp_file, new_exe_path)
-                    
-                    # Crear script de actualización más simple
-                    self.create_simple_update_script(new_exe_path, current_exe)
+                    time.sleep(1)
                     
                     progress_window.destroy()
                     
-                    # Mostrar mensaje y cerrar inmediatamente
-                    result = messagebox.askokcancel(
+                    # Mostrar mensaje final
+                    messagebox.showinfo(
                         "Actualización Lista",
-                        "La actualización está lista. La aplicación se cerrará ahora y se actualizará automáticamente.\n\n¿Continuar?"
+                        f"La nueva versión se ha descargado exitosamente.\n\n"
+                        f"Se abrirá la nueva versión v{update_info['version']}.\n"
+                        f"Puedes cerrar esta versión cuando quieras."
                     )
                     
-                    if result:
-                        # Cerrar inmediatamente sin reiniciar
-                        self.root.quit()
-                        self.root.destroy()
-                        os._exit(0)  # Forzar cierre completo
-                    else:
-                        # Si cancela, limpiar archivo temporal
-                        if os.path.exists(new_exe_path):
-                            os.remove(new_exe_path)
+                    # Ejecutar la nueva versión
+                    subprocess.Popen([new_exe_path], shell=False)
+                    
                 else:
-                    messagebox.showerror("Error", "No se pudo descargar la actualización.")
                     progress_window.destroy()
+                    messagebox.showerror("Error", "No se pudo descargar la actualización.")
                     
             except Exception as e:
-                messagebox.showerror("Error", f"Error durante la actualización: {e}")
                 progress_window.destroy()
+                messagebox.showerror("Error", f"Error durante la descarga: {e}")
         
         # Ejecutar descarga en hilo separado
-        thread = threading.Thread(target=download_and_prepare, daemon=True)
+        thread = threading.Thread(target=download_and_launch, daemon=True)
         thread.start()
-    
-    def create_simple_update_script(self, new_exe_path, current_exe):
-        """Crea un script de actualización más simple y confiable"""
-        script_content = f'''import os
-import time
-import shutil
-import subprocess
-import sys
-
-def main():
-    # Esperar un poco para asegurar que la app se cerró
-    time.sleep(4)
-    
-    new_file = r"{new_exe_path}"
-    current_file = r"{current_exe}"
-    backup_file = current_file + ".backup"
-    
-    try:
-        print("Iniciando actualización...")
-        
-        # Verificar que el nuevo archivo existe
-        if not os.path.exists(new_file):
-            print("Error: Archivo de actualización no encontrado")
-            return
-        
-        # Esperar hasta que el proceso original termine completamente
-        for i in range(20):  # Esperar hasta 20 segundos
-            try:
-                # Intentar hacer backup del archivo actual
-                if os.path.exists(current_file):
-                    shutil.copy2(current_file, backup_file)
-                    os.remove(current_file)
-                break
-            except (PermissionError, OSError):
-                print(f"Esperando que termine el proceso... ({{i+1}}/20)")
-                time.sleep(1)
-        else:
-            print("Error: No se pudo acceder al archivo original")
-            return
-        
-        # Mover el nuevo archivo
-        shutil.move(new_file, current_file)
-        print("Archivo actualizado exitosamente")
-        
-        # Limpiar backup
-        if os.path.exists(backup_file):
-            os.remove(backup_file)
-        
-        # Reiniciar la aplicación
-        print("Reiniciando aplicación...")
-        subprocess.Popen([current_file], shell=False)
-        print("Actualización completada")
-        
-    except Exception as e:
-        print(f"Error durante actualización: {{e}}")
-        # Restaurar backup si existe
-        if os.path.exists(backup_file):
-            try:
-                shutil.move(backup_file, current_file)
-                print("Backup restaurado")
-            except:
-                print("No se pudo restaurar backup")
-
-if __name__ == "__main__":
-    main()
-    # Autolimpieza
-    try:
-        time.sleep(2)
-        os.remove(__file__)
-    except:
-        pass
-'''
-        
-        script_path = os.path.join(tempfile.gettempdir(), f"update_script_{int(time.time())}.py")
-        
-        with open(script_path, 'w', encoding='utf-8') as f:
-            f.write(script_content)
-        
-        # Ejecutar script en proceso separado
-        subprocess.Popen([
-            sys.executable, script_path
-        ], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     
     def run(self):
         """Ejecuta la aplicación"""
