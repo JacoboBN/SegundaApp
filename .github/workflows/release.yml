@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Se ejecuta cuando creates un tag como v1.0.0, v1.0.1, etc.
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build executable
+      run: |
+        pyinstaller --onefile --windowed --name SegundaApp main.py
+        
+    - name: Get version from tag
+      id: get_version
+      shell: bash
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: SegundaApp v${{ steps.get_version.outputs.version }}
+        body: |
+          ## Cambios en v${{ steps.get_version.outputs.version }}
+          
+          - Actualización automática
+          - Mejoras en la interfaz
+          - Corrección de errores
+          
+          ### Instalación
+          1. Descarga el archivo `SegundaApp.exe`
+          2. Ejecuta el archivo
+          3. La aplicación verificará automáticamente actualizaciones futuras
+          
+          ### Requisitos
+          - Windows 10 o superior
+          
+        draft: false
+        prerelease: false
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/SegundaApp.exe
+        asset_name: SegundaApp.exe
+        asset_content_type: application/octet-stream
