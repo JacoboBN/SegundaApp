@@ -300,11 +300,19 @@ start "" "{dest_exe}"
         self.root.mainloop()
 
 if __name__ == "__main__":
+    # Log de arranque para depuración
+    try:
+        log_path = os.path.join(os.path.dirname(sys.executable), "arranque_segundaapp.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"Arranque: {time.strftime('%Y-%m-%d %H:%M:%S')} | PID: {os.getpid()}\n")
+    except Exception as e:
+        pass
+
     # Importar ttk para la barra de progreso
     try:
         from tkinter import ttk
     except ImportError:
         import tkinter.ttk as ttk
-    
+
     app = MainApp()
     app.run()
