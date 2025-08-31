@@ -268,6 +268,7 @@ if not errorlevel 1 (
     goto loop
 )
 move /y "{temp_new_exe}" "{dest_exe}"
+timeout /t 2 > nul
 start "" "{dest_exe}"
 '''
                     bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
