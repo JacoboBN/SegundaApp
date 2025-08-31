@@ -258,8 +258,10 @@ class MainApp:
                     # Ruta temporal del nuevo exe descargado
                     temp_new_exe = new_exe_path
 
-                    # Crear script .bat temporal SOLO para reemplazar el exe, sin reiniciar
+                    # Crear script .bat temporal SOLO para reemplazar el exe, con log y mensaje de error
                     bat_content = f'''@echo off
+setlocal
+set LOGFILE="%TEMP%\\segundaapp_update.log"
 timeout /t 2 > nul
 :loop
 tasklist | find /i "{os.path.basename(current_exe)}" > nul
@@ -267,8 +269,18 @@ if not errorlevel 1 (
     timeout /t 1 > nul
     goto loop
 )
-move /y "{temp_new_exe}" "{dest_exe}"
-echo Actualización completada. > "%TEMP%\\segundaapp_update.log"
+echo Intentando reemplazar el exe... > %LOGFILE%
+move /y "{temp_new_exe}" "{dest_exe}" >> %LOGFILE% 2>&1
+if errorlevel 1 (
+    echo ERROR: No se pudo reemplazar el exe. >> %LOGFILE%
+    echo. >> %LOGFILE%
+    echo No se pudo actualizar SegundaApp. >> %LOGFILE%
+    msg * "No se pudo actualizar SegundaApp. Cierra todos los procesos y vuelve a intentarlo." 2>nul
+    exit /b 1
+) else (
+    echo Actualización completada correctamente. >> %LOGFILE%
+)
+endlocal
 '''
                     bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
                     with os.fdopen(bat_fd, 'w', encoding='utf-8') as f:
