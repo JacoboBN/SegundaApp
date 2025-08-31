@@ -258,7 +258,7 @@ class MainApp:
                     # Ruta temporal del nuevo exe descargado
                     temp_new_exe = new_exe_path
 
-                    # Crear script .bat temporal
+                    # Crear script .bat temporal SOLO para reemplazar el exe, sin reiniciar
                     bat_content = f'''@echo off
 timeout /t 2 > nul
 :loop
@@ -268,8 +268,7 @@ if not errorlevel 1 (
     goto loop
 )
 move /y "{temp_new_exe}" "{dest_exe}"
-timeout /t 15 > nul
-start "" "{dest_exe}"
+echo Actualización completada. > "%TEMP%\\segundaapp_update.log"
 '''
                     bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
                     with os.fdopen(bat_fd, 'w', encoding='utf-8') as f:
@@ -278,8 +277,8 @@ start "" "{dest_exe}"
                     # Mensaje final antes de cerrar
                     messagebox.showinfo(
                         "Actualización Lista",
-                        f"La nueva versión se ha descargado exitosamente.\n\n"
-                        f"El programa se actualizará y reiniciará automáticamente."
+                        f"La nueva versión se ha descargado y reemplazado correctamente.\n\n"
+                        f"Por favor, cierra la aplicación y vuelve a abrirla manualmente para completar la actualización."
                     )
 
                     # Ejecutar el .bat y salir
