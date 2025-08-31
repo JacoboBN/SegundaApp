@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Configuración de la aplicación
 APP_NAME = "SegundaApp"
-VERSION = "1.0.13"
+VERSION = "1.0.14"
 GITHUB_REPO = "JacoboBN/SegundaApp"
 UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -126,7 +126,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="Hola Mundo!", 
+            text="Holaaaaaaaa Mundo!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
