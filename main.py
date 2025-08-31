@@ -205,77 +205,94 @@ class MainApp:
             self.perform_simple_update(update_info)
     
     def perform_simple_update(self, update_info):
-        """Descarga y ejecuta la nueva versión directamente"""
+        """Descarga la nueva versión, reemplaza el ejecutable y reinicia la app usando un .bat temporal"""
         download_url = update_info.get('download_url')
         if not download_url:
             messagebox.showerror("Error", "No se encontró el archivo de actualización.")
             return
-        
-        # Ventana de progreso
+
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Descargando actualización...")
         progress_window.geometry("350x120")
         progress_window.resizable(False, False)
         progress_window.transient(self.root)
         progress_window.grab_set()
-        
-        # Centrar ventana de progreso
+
         x = self.root.winfo_x() + 25
         y = self.root.winfo_y() + 40
         progress_window.geometry(f"350x120+{x}+{y}")
-        
+
         progress_label = tk.Label(progress_window, text="Descargando nueva versión...")
         progress_label.pack(pady=10)
-        
+
         progress_var = tk.DoubleVar()
         progress_bar = tk.ttk.Progressbar(
-            progress_window, 
-            variable=progress_var, 
+            progress_window,
+            variable=progress_var,
             maximum=100
         )
         progress_bar.pack(pady=10, padx=20, fill=tk.X)
-        
+
         status_label = tk.Label(progress_window, text="Preparando descarga...", fg="gray")
         status_label.pack()
-        
+
         def update_progress(percentage):
             progress_var.set(percentage)
             status_label.config(text=f"Descargado: {percentage:.1f}%")
             progress_window.update()
-        
-        def download_and_launch():
+
+        def download_and_replace():
             try:
                 checker = UpdateChecker(VERSION)
                 new_exe_path = checker.download_update(download_url, update_progress)
-                
                 if new_exe_path:
-                    status_label.config(text="Descarga completada. Iniciando nueva versión...")
+                    status_label.config(text="Descarga completada. Preparando actualización...")
                     progress_window.update()
                     time.sleep(1)
-                    
                     progress_window.destroy()
-                    
-                    # Mostrar mensaje final
+
+                    # Ruta del ejecutable actual
+                    current_exe = sys.executable
+                    # Ruta destino (donde está el .exe actual)
+                    dest_exe = current_exe
+                    # Ruta temporal del nuevo exe descargado
+                    temp_new_exe = new_exe_path
+
+                    # Crear script .bat temporal
+                    bat_content = f'''@echo off
+timeout /t 2 > nul
+:loop
+tasklist | find /i "{os.path.basename(current_exe)}" > nul
+if not errorlevel 1 (
+    timeout /t 1 > nul
+    goto loop
+)
+move /y "{temp_new_exe}" "{dest_exe}"
+start "" "{dest_exe}"
+'''
+                    bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
+                    with os.fdopen(bat_fd, 'w', encoding='utf-8') as f:
+                        f.write(bat_content)
+
+                    # Mensaje final antes de cerrar
                     messagebox.showinfo(
                         "Actualización Lista",
                         f"La nueva versión se ha descargado exitosamente.\n\n"
-                        f"Se abrirá la nueva versión v{update_info['version']}.\n"
-                        f"Puedes cerrar esta versión cuando quieras."
+                        f"El programa se actualizará y reiniciará automáticamente."
                     )
-                    
-                    # Ejecutar la nueva versión
-                    subprocess.Popen([new_exe_path], shell=False)
-                    
+
+                    # Ejecutar el .bat y salir
+                    subprocess.Popen([bat_path], shell=True, close_fds=True)
+                    self.root.after(500, self.root.destroy)
+                    sys.exit(0)
                 else:
                     progress_window.destroy()
                     messagebox.showerror("Error", "No se pudo descargar la actualización.")
-                    
             except Exception as e:
                 progress_window.destroy()
                 messagebox.showerror("Error", f"Error durante la descarga: {e}")
-        
-        # Ejecutar descarga en hilo separado
-        thread = threading.Thread(target=download_and_launch, daemon=True)
+
+        thread = threading.Thread(target=download_and_replace, daemon=True)
         thread.start()
     
     def run(self):
