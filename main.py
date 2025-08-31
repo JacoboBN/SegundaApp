@@ -126,7 +126,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="¡Hola Mundoooo!", 
+            text="HELLOOOO Mundoooo!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
