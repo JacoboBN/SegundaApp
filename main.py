@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Configuración de la aplicación
 APP_NAME = "SegundaApp"
-VERSION = "1.0.14"
+VERSION = "1.0.15"
 GITHUB_REPO = "JacoboBN/SegundaApp"
 UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -211,16 +211,6 @@ class MainApp:
             messagebox.showerror("Error", "No se encontró el archivo de actualización.")
             return
 
-        # Asegurarse de que podemos escribir en el directorio de destino
-        try:
-            current_exe = sys.executable
-            if not os.access(os.path.dirname(current_exe), os.W_OK):
-                messagebox.showerror("Error", "No tienes permisos para actualizar la aplicación.\nEjecútala como administrador.")
-                return
-        except Exception as e:
-            messagebox.showerror("Error", f"Error verificando permisos: {e}")
-            return
-
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Descargando actualización...")
         progress_window.geometry("350x120")
@@ -270,45 +260,26 @@ class MainApp:
 
                     # Crear script .bat temporal SOLO para reemplazar el exe, con log y mensaje de error
                     bat_content = f'''@echo off
-setlocal EnableDelayedExpansion
+setlocal
 set LOGFILE="%TEMP%\\segundaapp_update.log"
-set MAX_RETRIES=30
-set RETRY_COUNT=0
-
-echo Iniciando actualización... > %LOGFILE%
 timeout /t 2 > nul
-
-:wait_loop
+:loop
 tasklist | find /i "{os.path.basename(current_exe)}" > nul
 if not errorlevel 1 (
-    set /a RETRY_COUNT+=1
-    if !RETRY_COUNT! gtr %MAX_RETRIES% (
-        echo ERROR: Timeout esperando que la aplicación se cierre >> %LOGFILE%
-        msg * "No se pudo actualizar SegundaApp. La aplicación sigue en ejecución." 2>nul
-        exit /b 1
-    )
     timeout /t 1 > nul
-    goto wait_loop
+    goto loop
 )
-
-echo Intentando reemplazar el exe... >> %LOGFILE%
-set RETRY_COUNT=0
-
-:copy_loop
+echo Intentando reemplazar el exe... > %LOGFILE%
 move /y "{temp_new_exe}" "{dest_exe}" >> %LOGFILE% 2>&1
 if errorlevel 1 (
-    set /a RETRY_COUNT+=1
-    if !RETRY_COUNT! gtr 5 (
-        echo ERROR: No se pudo reemplazar el exe después de 5 intentos. >> %LOGFILE%
-        msg * "Error al actualizar SegundaApp. Ejecuta la aplicación como administrador." 2>nul
-        exit /b 1
-    )
-    timeout /t 2 > nul
-    goto copy_loop
+    echo ERROR: No se pudo reemplazar el exe. >> %LOGFILE%
+    echo. >> %LOGFILE%
+    echo No se pudo actualizar SegundaApp. >> %LOGFILE%
+    msg * "No se pudo actualizar SegundaApp. Cierra todos los procesos y vuelve a intentarlo." 2>nul
+    exit /b 1
+) else (
+    echo Actualización completada correctamente. >> %LOGFILE%
 )
-
-echo Actualización completada correctamente. >> %LOGFILE%
-start "" "{dest_exe}"
 endlocal
 '''
                     bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
@@ -316,24 +287,16 @@ endlocal
                         f.write(bat_content)
 
                     # Mensaje final antes de cerrar
-                    if messagebox.askyesno(
+                    messagebox.showinfo(
                         "Actualización Lista",
-                        "La nueva versión se ha descargado correctamente.\n\n"
-                        "La aplicación se cerrará y se actualizará automáticamente.\n"
-                        "¿Deseas continuar?",
-                        icon="info"
-                    ):
-                        # Ejecutar el .bat y salir
-                        subprocess.Popen([bat_path], shell=True, close_fds=True)
-                        self.root.after(100, self.root.quit)  # Usar quit en lugar de destroy
-                        sys.exit(0)
-                    else:
-                        # Si el usuario cancela, limpiamos los archivos temporales
-                        try:
-                            os.remove(temp_new_exe)
-                            os.remove(bat_path)
-                        except:
-                            pass
+                        f"La nueva versión se ha descargado y reemplazado correctamente.\n\n"
+                        f"Por favor, cierra la aplicación y vuelve a abrirla manualmente para completar la actualización."
+                    )
+
+                    # Ejecutar el .bat y salir
+                    subprocess.Popen([bat_path], shell=True, close_fds=True)
+                    self.root.after(500, self.root.destroy)
+                    sys.exit(0)
                 else:
                     progress_window.destroy()
                     messagebox.showerror("Error", "No se pudo descargar la actualización.")
