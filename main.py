@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Configuración de la aplicación
 APP_NAME = "SegundaApp"
-VERSION = "1.0.17"
+VERSION = "1.0.18"
 GITHUB_REPO = "JacoboBN/SegundaApp"
 UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -27,13 +27,17 @@ class UpdateChecker:
     def check_for_updates(self):
         """Verifica si hay actualizaciones disponibles"""
         try:
+            print(f"[DEBUG] Versión actual: {self.current_version}")
             response = requests.get(UPDATE_CHECK_URL, timeout=10)
             response.raise_for_status()
             release_info = response.json()
             
             latest_version = release_info['tag_name'].lstrip('v')
+            print(f"[DEBUG] Versión en GitHub: {latest_version}")
+            print(f"[DEBUG] Tag completo: {release_info['tag_name']}")
             
             if self.is_newer_version(latest_version, self.current_version):
+                print(f"[DEBUG] ¡Nueva versión detectada! {latest_version} > {self.current_version}")
                 return {
                     'available': True,
                     'version': latest_version,
@@ -41,6 +45,7 @@ class UpdateChecker:
                     'release_notes': release_info.get('body', 'Sin notas de versión')
                 }
             else:
+                print(f"[DEBUG] No hay actualizaciones. {latest_version} <= {self.current_version}")
                 return {'available': False}
                 
         except Exception as e:
@@ -126,7 +131,7 @@ class MainApp:
         # Título principal
         title_label = tk.Label(
             self.root, 
-            text="Holaaa Mundo Feliz!", 
+            text="¡Hola Mundo!", 
             font=("Arial", 24, "bold"),
             fg="blue"
         )
@@ -205,106 +210,77 @@ class MainApp:
             self.perform_simple_update(update_info)
     
     def perform_simple_update(self, update_info):
-        """Descarga la nueva versión, reemplaza el ejecutable y reinicia la app usando un .bat temporal"""
+        """Descarga y ejecuta la nueva versión directamente"""
         download_url = update_info.get('download_url')
         if not download_url:
             messagebox.showerror("Error", "No se encontró el archivo de actualización.")
             return
-
+        
+        # Ventana de progreso
         progress_window = tk.Toplevel(self.root)
         progress_window.title("Descargando actualización...")
         progress_window.geometry("350x120")
         progress_window.resizable(False, False)
         progress_window.transient(self.root)
         progress_window.grab_set()
-
+        
+        # Centrar ventana de progreso
         x = self.root.winfo_x() + 25
         y = self.root.winfo_y() + 40
         progress_window.geometry(f"350x120+{x}+{y}")
-
+        
         progress_label = tk.Label(progress_window, text="Descargando nueva versión...")
         progress_label.pack(pady=10)
-
+        
         progress_var = tk.DoubleVar()
         progress_bar = tk.ttk.Progressbar(
-            progress_window,
-            variable=progress_var,
+            progress_window, 
+            variable=progress_var, 
             maximum=100
         )
         progress_bar.pack(pady=10, padx=20, fill=tk.X)
-
+        
         status_label = tk.Label(progress_window, text="Preparando descarga...", fg="gray")
         status_label.pack()
-
+        
         def update_progress(percentage):
             progress_var.set(percentage)
             status_label.config(text=f"Descargado: {percentage:.1f}%")
             progress_window.update()
-
-        def download_and_replace():
+        
+        def download_and_launch():
             try:
                 checker = UpdateChecker(VERSION)
                 new_exe_path = checker.download_update(download_url, update_progress)
+                
                 if new_exe_path:
-                    status_label.config(text="Descarga completada. Preparando actualización...")
+                    status_label.config(text="Descarga completada. Iniciando nueva versión...")
                     progress_window.update()
                     time.sleep(1)
+                    
                     progress_window.destroy()
-
-                    # Ruta del ejecutable actual
-                    current_exe = sys.executable
-                    # Ruta destino (donde está el .exe actual)
-                    dest_exe = current_exe
-                    # Ruta temporal del nuevo exe descargado
-                    temp_new_exe = new_exe_path
-
-                    # Crear script .bat temporal SOLO para reemplazar el exe, con log y mensaje de error
-                    bat_content = f'''@echo off
-setlocal
-set LOGFILE="%TEMP%\\segundaapp_update.log"
-timeout /t 2 > nul
-:loop
-tasklist | find /i "{os.path.basename(current_exe)}" > nul
-if not errorlevel 1 (
-    timeout /t 1 > nul
-    goto loop
-)
-echo Intentando reemplazar el exe... > %LOGFILE%
-move /y "{temp_new_exe}" "{dest_exe}" >> %LOGFILE% 2>&1
-if errorlevel 1 (
-    echo ERROR: No se pudo reemplazar el exe. >> %LOGFILE%
-    echo. >> %LOGFILE%
-    echo No se pudo actualizar SegundaApp. >> %LOGFILE%
-    msg * "No se pudo actualizar SegundaApp. Cierra todos los procesos y vuelve a intentarlo." 2>nul
-    exit /b 1
-) else (
-    echo Actualización completada correctamente. >> %LOGFILE%
-)
-endlocal
-'''
-                    bat_fd, bat_path = tempfile.mkstemp(suffix='.bat', text=True)
-                    with os.fdopen(bat_fd, 'w', encoding='utf-8') as f:
-                        f.write(bat_content)
-
-                    # Mensaje final antes de cerrar
+                    
+                    # Mostrar mensaje final
                     messagebox.showinfo(
                         "Actualización Lista",
-                        f"La nueva versión se ha descargado y reemplazado correctamente.\n\n"
-                        f"Por favor, cierra la aplicación y vuelve a abrirla manualmente para completar la actualización."
+                        f"La nueva versión se ha descargado exitosamente.\n\n"
+                        f"Se abrirá la nueva versión v{update_info['version']}.\n"
+                        f"Puedes cerrar esta versión cuando quieras."
                     )
-
-                    # Ejecutar el .bat y salir
-                    subprocess.Popen([bat_path], shell=True, close_fds=True)
-                    self.root.after(500, self.root.destroy)
-                    sys.exit(0)
+                    
+                    # Ejecutar la nueva versión
+                    subprocess.Popen([new_exe_path], shell=False)
+                    
                 else:
                     progress_window.destroy()
                     messagebox.showerror("Error", "No se pudo descargar la actualización.")
+                    
             except Exception as e:
                 progress_window.destroy()
                 messagebox.showerror("Error", f"Error durante la descarga: {e}")
-
-        thread = threading.Thread(target=download_and_replace, daemon=True)
+        
+        # Ejecutar descarga en hilo separado
+        thread = threading.Thread(target=download_and_launch, daemon=True)
         thread.start()
     
     def run(self):
@@ -312,19 +288,11 @@ endlocal
         self.root.mainloop()
 
 if __name__ == "__main__":
-    # Log de arranque para depuración
-    try:
-        log_path = os.path.join(os.path.dirname(sys.executable), "arranque_segundaapp.log")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"Arranque: {time.strftime('%Y-%m-%d %H:%M:%S')} | PID: {os.getpid()}\n")
-    except Exception as e:
-        pass
-
     # Importar ttk para la barra de progreso
     try:
         from tkinter import ttk
     except ImportError:
         import tkinter.ttk as ttk
-
+    
     app = MainApp()
     app.run()
