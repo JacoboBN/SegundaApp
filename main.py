@@ -81,7 +81,9 @@ class UpdateChecker:
             response.raise_for_status()
             
             # Crear archivo temporal con nombre único
-            temp_dir = tempfile.gettempdir()
+            temp_dir = os.path.join(os.path.expanduser("~"), "Downloads")  # Usar la carpeta Downloads
+            if not os.path.exists(temp_dir):
+                temp_dir = tempfile.gettempdir()  # Fallback al directorio temporal si Downloads no existe
             timestamp = int(time.time())
             temp_file = os.path.join(temp_dir, f"{APP_NAME}_update_{timestamp}.exe")
             
@@ -277,7 +279,20 @@ class MainApp:
                     
             except Exception as e:
                 progress_window.destroy()
-                messagebox.showerror("Error", f"Error durante la descarga: {e}")
+                error_msg = str(e)
+                if "WinError 225" in error_msg:
+                    messagebox.showerror(
+                        "Error de Seguridad",
+                        "Windows Defender está bloqueando la descarga por seguridad.\n\n"
+                        "Para continuar con la actualización:\n"
+                        "1. Ve a la página de releases en GitHub:\n"
+                        f"   https://github.com/{GITHUB_REPO}/releases\n"
+                        "2. Descarga manualmente el archivo .exe más reciente\n"
+                        "3. Al abrir el archivo, si Windows muestra una advertencia,\n"
+                        "   haz clic en 'Más información' y luego en 'Ejecutar de todas formas'"
+                    )
+                else:
+                    messagebox.showerror("Error", f"Error durante la descarga: {e}")
         
         # Ejecutar descarga en hilo separado
         thread = threading.Thread(target=download_and_launch, daemon=True)
